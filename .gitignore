@@ -1,0 +1,33 @@
+# Build artifacts
+build/
+dist/
+*.spec.bak
+*.log
+
+# PyInstaller
+*.manifest
+*.exe
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+env/
+venv/
+ENV/
+build/
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+.DS_Store
+
+# Project specific
+*.pyc
+.pytest_cache/
+
