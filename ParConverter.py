@@ -203,6 +203,11 @@ DEFAULT_PROFILE = build_default_profile()
 def compute_converted_text(parsed: dict, profile: dict) -> tuple[str, list[str]]:
     """
     Compute output text using SECTION_OUT_ORDER and profile.
+    
+    v1.0.1 Improvement: Automatically detects and appends unknown parameters
+    (parameters in input that are not in SECTION_OUT_ORDER predefined list).
+    Unknown parameters are sorted numerically and appended after predefined ones.
+    
     Returns: (output_text, warnings)
     """
     out_lines = []
@@ -214,6 +219,10 @@ def compute_converted_text(parsed: dict, profile: dict) -> tuple[str, list[str]]
         in_map = parsed.get(section_name, {})
         rules = profile.get(section_name, {})
 
+        # Track which parameter IDs have been output
+        output_ids_set = set(out_ids)
+
+        # === PART 1: Output predefined parameters (maintains order) ===
         for oid in out_ids:
             rule = rules.get(oid, ("src", oid))
             kind = rule[0]
@@ -245,6 +254,36 @@ def compute_converted_text(parsed: dict, profile: dict) -> tuple[str, list[str]]
             else:
                 warnings.append(f"[{section_name}] Unknown rule type for {oid}: {rule}")
                 out_lines.append(f"{oid}\t")
+
+        # === PART 2: Detect and output unknown parameters (auto-detected) ===
+        unknown_ids = sorted(set(in_map.keys()) - output_ids_set)
+        
+        for oid in unknown_ids:
+            # Default rule: source mapping (use input value directly)
+            rule = rules.get(oid, ("src", oid))
+            kind = rule[0]
+
+            if kind == "src":
+                raw = in_map.get(oid)
+                if raw is not None:
+                    out_lines.append(f"{oid}\t{normalize_value(raw)}")
+                else:
+                    out_lines.append(f"{oid}\t")
+
+            elif kind == "const":
+                out_lines.append(f"{oid}\t{normalize_value(rule[1])}")
+
+            elif kind == "mul":
+                src_id, factor = rule[1], rule[2]
+                raw = in_map.get(src_id)
+                if raw is None:
+                    out_lines.append(f"{oid}\t")
+                else:
+                    try:
+                        v = float(raw)
+                        out_lines.append(f"{oid}\t{normalize_value(v * factor)}")
+                    except Exception:
+                        out_lines.append(f"{oid}\t")
 
         out_lines.append("")  # blank line after each section
 
