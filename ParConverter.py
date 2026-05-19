@@ -97,12 +97,13 @@ SECTION_OUT_ORDER = [
 def build_default_profile() -> dict:
     """
     Conversion profile:
-    - ('src', src_id): take from input
-    - ('const', value): fixed value
+    - ('src', src_id): take from input (v1.0.3: ALL parameters use this)
+    - ('const', value): fixed value (REMOVED in v1.0.3 - no more hardcoded constants)
     - ('mul', src_id, factor): multiply numeric value
 
-    This default profile is written to reproduce the user-provided sample output
-    when given the user-provided sample input.
+    v1.0.3 CHANGE: Profile now uses ONLY source-based rules.
+    All parameters take their values directly from input data.
+    This fixes issues where hardcoded constants were overriding input values.
     """
     profile = {
         "General Parameters": {},
@@ -114,85 +115,51 @@ def build_default_profile() -> dict:
     # --------------------------
     # General Parameters
     # --------------------------
-    gen_const = {
-        2: "11001", 10: "34", 11: "2", 13: "10000",
-        16: "13", 17: "20", 18: "30",
-        33: "4",
-        41: "2", 42: "0", 43: "0", 44: "1", 45: "0", 46: "25", 47: "2",
-        60: "1", 61: "50", 62: "30", 63: "0", 64: "100", 65: "2", 66: "36", 67: "20",
-        68: "1", 69: "0.05", 70: "1", 71: "0.125", 72: "0",
-    }
+    # v1.0.3: All parameters use input values (source-based), no hardcoded constants
     gen_src = [
-        3,4,6,7,8,9,14,15,19,20,21,22,23,24,25,26,27,28,29,30,31,32,34,35,37,38,39,40,
-        50,51,52,53,54,55,56,57,58,59
+        2,3,4,6,7,8,9,10,11,13,14,15,16,17,18,19,20,21,22,23,24,25,26,27,28,29,30,31,32,
+        33,34,35,37,38,39,40,41,42,43,44,45,46,47,50,51,52,53,54,55,56,57,58,59,60,61,62,
+        63,64,65,66,67,68,69,70,71,72
     ]
     for oid in gen_src:
         profile["General Parameters"][oid] = ("src", oid)
-    for oid, v in gen_const.items():
-        profile["General Parameters"][oid] = ("const", v)
 
     # --------------------------
     # Match Parameters
     # --------------------------
+    # v1.0.3: All parameters use input values (source-based), no hardcoded constants
     match_src = [
-        104,105,107,109,111,112,113,114,115,116,120,121,122,123,124,125,126,
-        132,133,135,136,137,138,140,144,145,146,150,151,152,153,154,155,156,157,158,159,160,
-        164,165,166,167,168,169
+        104,105,107,109,111,112,113,114,115,116,120,121,122,123,124,125,126,127,131,132,133,
+        135,136,137,138,139,140,144,145,146,150,151,152,153,154,155,156,157,158,159,160,161,
+        162,163,164,165,166,167,168,169
     ]
     for oid in match_src:
         profile["Match Parameters"][oid] = ("src", oid)
 
-    # 127 doubled: 13.560 -> 27.12
-    profile["Match Parameters"][127] = ("mul", 127, 2)
-
-    match_const = {
-        131: "1000",
-        139: "25",
-        161: "1.1",
-        162: "1.5",
-        163: "2",
-    }
-    for oid, v in match_const.items():
-        profile["Match Parameters"][oid] = ("const", v)
 
     # --------------------------
     # Generator Parameters
     # --------------------------
+    # v1.0.3: All parameters use input values (source-based), no hardcoded constants
     genr_src = [
-        301,304,306,307,308,309,310,311,312,313,314,315,316,317,318,319,320,321,322,323,324,
-        340,341,342,343,344,345,347,348,349,350,351
+        300,301,302,303,304,305,306,307,308,309,310,311,312,313,314,315,316,317,318,319,320,
+        321,322,323,324,325,326,340,341,342,343,344,345,346,347,348,349,350,351
     ]
     for oid in genr_src:
         profile["Generator Parameters"][oid] = ("src", oid)
 
-    genr_const = {
-        300: "500",
-        302: "0.5",
-        303: "-2.18",
-        305: "36",
-        325: "2",
-        326: "0",
-        346: "200",
-    }
-    for oid, v in genr_const.items():
-        profile["Generator Parameters"][oid] = ("const", v)
 
     # --------------------------
-    # PIDs (mostly constants per sample output)
+    # PIDs (mostly source-based per user requirement)
     # --------------------------
-    pid_consts = {
-        1:"3", 2:"1.5", 3:"0.2", 4:"0", 5:"-5", 6:"5", 10:"0.9",
-        11:"5", 12:"3", 13:"0.1", 14:"0", 15:"-2", 16:"2", 20:"1.1",
-        101:"3", 102:"1.5", 103:"0.2", 104:"0", 105:"-5", 106:"5",
-        111:"4", 112:"15", 113:"0", 114:"0", 115:"-50", 116:"50", 120:"1.05", 130:"100",
-        201:"3", 202:"1.5", 203:"0.2", 204:"0", 205:"-5", 206:"5",
-        211:"4", 212:"15", 213:"0", 214:"0", 215:"-50", 216:"50", 220:"1.05", 230:"100",
-        301:"3", 302:"1.5", 303:"0.2", 304:"0", 305:"-5", 306:"5",
-        311:"4", 312:"15", 313:"0", 314:"0", 315:"-50", 316:"50",
-        320:"1.1", 330:"100"
-    }
-    for oid, v in pid_consts.items():
-        profile["PIDs"][oid] = ("const", v)
+    # v1.0.3: All parameters use input values (source-based), no hardcoded constants
+    pid_src = [
+        1,2,3,4,5,6,10,11,12,13,14,15,16,20,101,102,103,104,105,106,111,112,113,114,115,116,
+        120,130,201,202,203,204,205,206,211,212,213,214,215,216,220,230,301,302,303,304,305,
+        306,311,312,313,314,315,316,320,330
+    ]
+    for oid in pid_src:
+        profile["PIDs"][oid] = ("src", oid)
 
     return profile
 
@@ -204,9 +171,13 @@ def compute_converted_text(parsed: dict, profile: dict) -> tuple[str, list[str]]
     """
     Compute output text using SECTION_OUT_ORDER and profile.
     
-    v1.0.1 Improvement: Automatically detects and appends unknown parameters
-    (parameters in input that are not in SECTION_OUT_ORDER predefined list).
-    Unknown parameters are sorted numerically and appended after predefined ones.
+    v1.0.2 BEHAVIOR (Fixed):
+    - Parameters NOT in input are OMITTED from output (no hardcoded defaults)
+    - Only parameters present in input are converted and outputted
+    
+    v1.0.1 feature (still active):
+    - Automatically detects and appends unknown parameters (in input but not predefined)
+    - Unknown parameters are sorted numerically and appended after predefined ones
     
     Returns: (output_text, warnings)
     """
@@ -224,6 +195,10 @@ def compute_converted_text(parsed: dict, profile: dict) -> tuple[str, list[str]]
 
         # === PART 1: Output predefined parameters (maintains order) ===
         for oid in out_ids:
+            # v1.0.2 FIX: Skip parameters NOT in input (don't output empty/constant values for missing params)
+            if oid not in in_map:
+                continue
+            
             rule = rules.get(oid, ("src", oid))
             kind = rule[0]
 
