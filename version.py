@@ -2,7 +2,7 @@
 ParConverter Version Information
 """
 
-__version__ = "1.0.3"
+__version__ = "1.0.4"
 __author__ = "ParConverter Contributors"
 __title__ = "Tlog Parameter List Converter"
 __description__ = "GUI application for converting tlog parameter lists - All input-driven, no hardcoded values"

@@ -7,6 +7,29 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [1.0.4] - 2026-05-19
+
+### Fixed (Missing Parameters Bug)
+- **Parameters 48 and 49 were missing from General Parameters predefined list**
+- **Issue**: Input with param 48 was not appearing in output
+- **Root Cause**: SECTION_OUT_ORDER for General Parameters had a gap:
+  ```
+  47, [missing 48, 49], 50  ← Gap!
+  ```
+- **Solution**: Added parameters 48 and 49 to both SECTION_OUT_ORDER and gen_src profile list
+
+### Changes
+- **General Parameters list**: Added 48, 49 between 47 and 50
+- **Profile (gen_src)**: Added 48, 49 to source-based parameters
+- Now all General Parameters from 2-72 are included (except the intentionally skipped ones: 1, 5, 12, 36, 49)
+
+### Verification
+- Input param 48 → Now outputs correctly ✅
+- Input param 49 → Now outputs correctly ✅
+- All other parameters unaffected ✅
+
+---
+
 ## [1.0.3] - 2026-05-19
 
 ### Fixed (Profile Configuration Bug)
