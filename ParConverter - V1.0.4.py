@@ -38,104 +38,70 @@ def normalize_value(val) -> str:
 
 
 def _canonical_section_name(raw: str) -> str:
-    """
-    Map noisy/variant section header strings to canonical section names.
+    """Map noisy/variant section header strings to canonical section names.
 
-    Added Quantum support:
-    - '// HF Match Params' -> 'HF Match'
-    - '// LF Match Params' -> 'LF Match'
+    Examples:
+    - 'General mlV9M6ZDOVs' -> 'General'
+    - 'General Parameters'  -> 'General'
+    - 'Match Params'        -> 'Match'
+    - 'Generator XYZ'       -> 'Generator'
+    - 'PIDS' or 'PID'       -> 'PIDs'
+
+    If no known keyword is found, return the stripped original string.
     """
     s = (raw or "").lower()
+    # remove punctuation that might be injected
     s_clean = re.sub(r"[^a-z0-9\s]", " ", s)
-
-    # Quantum split sections
-    if "match" in s_clean and "hf" in s_clean:
-        return "HF Match"
-    if "match" in s_clean and "lf" in s_clean:
-        return "LF Match"
 
     if "general" in s_clean:
         return "General"
     if "match" in s_clean:
         return "Match"
-    if "generator" in s_clean or re.search(r"\bgen\b", s_clean):
+    if "generator" in s_clean or "gen" in s_clean:
         return "Generator"
     if "pid" in s_clean:
         return "PIDs"
 
+    # fallback to trimmed original (preserve casing)
     return raw.strip()
 
 
 def parse_tlog_parameter_list(text: str) -> dict:
     """
     Parse text into a dict: {section_name: {param_id: raw_value_string}}
-
-    Supports BOTH formats:
-    A) Tykon style:   "104 5000.0, 105 1000.0"
-    B) Quantum style: "1,70.0,2,1010,3,0,4,0,..."
-
-    Sections are recognized by lines starting with '//'.
-    Non-parameter lines (Unit_SW_Type, Board_Info, etc.) are ignored safely.
+    Sections are recognized by lines starting with '//'
+    Parameter pairs are parsed from comma-separated or whitespace-separated tokens.
     """
     section = None
     data = {}
-
-    int_token = re.compile(r"^-?\d+$")
-    id_value_same_token = re.compile(r"^(-?\d+)\s+(.+)$")
 
     for line in text.splitlines():
         line = line.strip()
         if not line:
             continue
 
-        # Section header
+        # Section line
         if line.startswith("//"):
             section_raw = line[2:].strip()
             section = _canonical_section_name(section_raw)
             data.setdefault(section, {})
             continue
 
-        # If we haven't entered a section yet, ignore metadata lines
-        if section is None:
-            continue
-
-        # Split by commas (Quantum uses pure comma token stream)
-        tokens = [t.strip() for t in line.split(",") if t.strip()]
-        if not tokens:
-            continue
-
-        # First pass: handle tokens that look like "123 45.6"
-        pending_tokens = []
-        for t in tokens:
-            m = id_value_same_token.match(t)
-            if m:
-                pid = int(m.group(1))
-                val = m.group(2).strip()
-                data.setdefault(section, {})[pid] = val
-            else:
-                pending_tokens.append(t)
-
-        # Second pass: handle alternating "id, value, id, value"
-        i = 0
-        while i < len(pending_tokens) - 1:
-            t = pending_tokens[i]
-            if int_token.match(t):
-                pid = int(t)
-                val = pending_tokens[i + 1]
-                data.setdefault(section, {})[pid] = val
-                i += 2
-            else:
-                i += 1
+        # Split by commas into chunks like "2 000000"
+        parts = [p.strip() for p in line.split(",") if p.strip()]
+        for p in parts:
+            m = re.match(r"^(-?\d+)\s+(.+)$", p)
+            if not m:
+                continue
+            pid = int(m.group(1))
+            val = m.group(2).strip()
+            data.setdefault(section or "Unknown", {})[pid] = val
 
     return data
 
 
-# =============================================================================
-# Output layout definitions
-# =============================================================================
-
-# --- Tykon output order (your original) ---
-TYKON_SECTION_OUT_ORDER = [
+# Output layout (order + header labels) exactly like user requested
+SECTION_OUT_ORDER = [
     ("General\tParameters", "General", [
         2,3,4,6,7,8,9,10,11,13,14,15,16,17,18,19,20,21,22,23,24,25,26,27,28,29,30,31,32,
         33,34,35,37,38,39,40,41,42,43,44,45,46,47,48,49,50,51,52,53,54,55,56,57,58,59,60,61,62,
@@ -157,78 +123,112 @@ TYKON_SECTION_OUT_ORDER = [
     ]),
 ]
 
-# --- Quantum output order (separate HF/LF Match) ---
-QUANTUM_SECTION_OUT_ORDER = [
-    ("General\tParameters", "General", [
-        # Quantum General includes id=1 also, so include it
-        1,2,3,4,6,7,8,9,10,11,13,14,15,16,17,18,19,20,21,22,23,24,25,26,27,28,29,30,31,32,
-        33,35,36,37,38,39,40,41,42,43,
-        # Keep extra IDs if future Quantum logs include them; missing ones are skipped anyway
-        44,45,46,47,48,49,50,51,52,53,54,55,56,57,58,59,60,61,62,63,64,65,66,67,68,69,70,71,72
-    ]),
-    ("HF\tMatch\tParameters", "HF Match", [
-        101,102,103,104,105,106,107,109,111,112,113,114,115,
-        120,121,122,123,124,126,127,131,132,133,
-        135,136,137,138,139,140,141,
-        144,145,146,147,148,
-        150,151,152,153,154,155,156,157,158,159,160,161,162,163,164,165,166,167,168,169
-    ]),
-    ("LF\tMatch\tParameters", "LF Match", [
-        201,202,203,204,205,206,207,209,211,212,
-        220,221,222,223,224,226,227,
-        231,232,233,235,236,237,238,239,240,241,
-        244,245,246,247,248,
-        250,251,252,253,254,255,256,257,258,259,260,261,262,263,264,265,266,267,268,269
-    ]),
-]
+
+def build_default_profile() -> dict:
+    """
+    Conversion profile:
+    - ('src', src_id): take from input (v1.0.3: ALL parameters use this)
+    - ('const', value): fixed value (REMOVED in v1.0.3 - no more hardcoded constants)
+    - ('mul', src_id, factor): multiply numeric value
+
+    v1.0.3 CHANGE: Profile now uses ONLY source-based rules.
+    All parameters take their values directly from input data.
+    This fixes issues where hardcoded constants were overriding input values.
+    """
+    profile = {
+        "General": {},
+        "Match": {},
+        "Generator": {},
+        "PIDs": {},
+    }
+
+    # --------------------------
+    # General Parameters
+    # --------------------------
+    # v1.0.3: All parameters use input values (source-based), no hardcoded constants
+    gen_src = [
+        2,3,4,6,7,8,9,10,11,13,14,15,16,17,18,19,20,21,22,23,24,25,26,27,28,29,30,31,32,
+        33,34,35,37,38,39,40,41,42,43,44,45,46,47,48,49,50,51,52,53,54,55,56,57,58,59,60,61,62,
+        63,64,65,66,67,68,69,70,71,72
+    ]
+    for oid in gen_src:
+        profile["General"][oid] = ("src", oid)
+
+    # --------------------------
+    # Match Parameters
+    # --------------------------
+    # v1.0.3: All parameters use input values (source-based), no hardcoded constants
+    match_src = [
+        104,105,107,109,111,112,113,114,115,116,120,121,122,123,124,125,126,127,131,132,133,
+        135,136,137,138,139,140,144,145,146,150,151,152,153,154,155,156,157,158,159,160,161,
+        162,163,164,165,166,167,168,169
+    ]
+    for oid in match_src:
+        profile["Match"][oid] = ("src", oid)
 
 
-def build_profile_from_order(section_out_order: list[tuple[str, str, list[int]]]) -> dict:
-    """
-    Build a pure source-based profile: every listed param uses ("src", same_id).
-    """
-    profile = {}
-    for _, section_name, out_ids in section_out_order:
-        profile.setdefault(section_name, {})
-        for oid in out_ids:
-            profile[section_name][oid] = ("src", oid)
+    # --------------------------
+    # Generator Parameters
+    # --------------------------
+    # v1.0.3: All parameters use input values (source-based), no hardcoded constants
+    genr_src = [
+        300,301,302,303,304,305,306,307,308,309,310,311,312,313,314,315,316,317,318,319,320,
+        321,322,323,324,325,326,340,341,342,343,344,345,346,347,348,349,350,351
+    ]
+    for oid in genr_src:
+        profile["Generator"][oid] = ("src", oid)
+
+
+    # --------------------------
+    # PIDs (mostly source-based per user requirement)
+    # --------------------------
+    # v1.0.3: All parameters use input values (source-based), no hardcoded constants
+    pid_src = [
+        1,2,3,4,5,6,10,11,12,13,14,15,16,20,101,102,103,104,105,106,111,112,113,114,115,116,
+        120,130,201,202,203,204,205,206,211,212,213,214,215,216,220,230,301,302,303,304,305,
+        306,311,312,313,314,315,316,320,330
+    ]
+    for oid in pid_src:
+        profile["PIDs"][oid] = ("src", oid)
+
     return profile
 
 
-DEFAULT_PROFILE_TYKON = build_profile_from_order(TYKON_SECTION_OUT_ORDER)
-DEFAULT_PROFILE_QUANTUM = build_profile_from_order(QUANTUM_SECTION_OUT_ORDER)
+DEFAULT_PROFILE = build_default_profile()
 
 
-def compute_converted_text(parsed: dict,
-                           profile: dict,
-                           section_out_order: list[tuple[str, str, list[int]]],
-                           hide_empty_sections: bool = True) -> tuple[str, list[str]]:
+def compute_converted_text(parsed: dict, profile: dict) -> tuple[str, list[str]]:
     """
-    Compute output text using the given section_out_order and profile.
-
-    - Parameters NOT in input are omitted (no empty placeholders)
-    - Unknown parameters are appended (sorted) after predefined ones
-    - Optionally hide sections that have no parsed parameters (recommended for Quantum)
+    Compute output text using SECTION_OUT_ORDER and profile.
+    
+    v1.0.2 BEHAVIOR (Fixed):
+    - Parameters NOT in input are OMITTED from output (no hardcoded defaults)
+    - Only parameters present in input are converted and outputted
+    
+    v1.0.1 feature (still active):
+    - Automatically detects and appends unknown parameters (in input but not predefined)
+    - Unknown parameters are sorted numerically and appended after predefined ones
+    
+    Returns: (output_text, warnings)
     """
     out_lines = []
     warnings = []
 
-    for header, section_name, out_ids in section_out_order:
-        in_map = parsed.get(section_name, {})
-        if hide_empty_sections and not in_map:
-            continue
-
+    for header, section_name, out_ids in SECTION_OUT_ORDER:
         out_lines.append(header)
 
+        in_map = parsed.get(section_name, {})
         rules = profile.get(section_name, {})
 
+        # Track which parameter IDs have been output
         output_ids_set = set(out_ids)
 
-        # PART 1: predefined parameters in order
+        # === PART 1: Output predefined parameters (maintains order) ===
         for oid in out_ids:
+            # v1.0.2 FIX: Skip parameters NOT in input (don't output empty/constant values for missing params)
             if oid not in in_map:
                 continue
-
+            
             rule = rules.get(oid, ("src", oid))
             kind = rule[0]
 
@@ -237,9 +237,7 @@ def compute_converted_text(parsed: dict,
                 raw = in_map.get(src_id)
                 if raw is None:
                     warnings.append(f"[{section_name}] Missing input param: {src_id} (needed for output {oid})")
-                    out_lines.append(f"{oid}\t")
-                else:
-                    out_lines.append(f"{oid}\t{normalize_value(raw)}")
+                out_lines.append(f"{oid}\t{normalize_value(raw)}" if raw is not None else f"{oid}\t")
 
             elif kind == "const":
                 out_lines.append(f"{oid}\t{normalize_value(rule[1])}")
@@ -266,9 +264,11 @@ def compute_converted_text(parsed: dict,
                 warnings.append(f"[{section_name}] Unknown rule type for {oid}: {rule}")
                 out_lines.append(f"{oid}\t")
 
-        # PART 2: unknown parameters (in input but not in predefined list)
+        # === PART 2: Detect and output unknown parameters (auto-detected) ===
         unknown_ids = sorted(set(in_map.keys()) - output_ids_set)
+        
         for oid in unknown_ids:
+            # Default rule: source mapping (use input value directly)
             rule = rules.get(oid, ("src", oid))
             kind = rule[0]
 
@@ -297,10 +297,7 @@ def compute_converted_text(parsed: dict,
                     except Exception:
                         out_lines.append(f"{oid}\t")
 
-        out_lines.append("")
-
-    if not out_lines:
-        return "", ["No parameters parsed. Check input format / section headers."]
+        out_lines.append("")  # blank line after each section
 
     return "\n".join(out_lines).rstrip() + "\n", warnings
 
@@ -325,6 +322,26 @@ SAMPLE_INPUT_TEXT = """// General Parameters
 153 0.0, 154 0.0, 155 0, 156 0, 157 0, 158 0, 159 0.020, 160 0.005
 161 0.60, 162 1.40, 163 1.80, 164 0.050, 165 0.070, 166 0.090, 167 3.00, 168 4.00
 169 5.00
+
+// Generator Parameters
+300 1200, 301 -2.50, 302 0.90, 303 -2.33, 304 3000.0, 305 47.0, 306 100, 307 40.0
+308 0.1, 309 5, 310 2, 311 2, 312 0, 313 0, 314 0, 315 3330.0
+316 0, 317 1.00, 318 1, 319 50.0, 320 1, 321 0, 322 0, 323 0
+324 5, 325 1, 340 50.0, 341 7.0, 342 550.0, 343 10.0, 344 550.0, 345 70.0
+346 240.0, 347 2.0, 348 70.0, 349 50.0, 350 50.0, 351 180.0
+
+// PIDs
+1 1.000, 2 1.500, 3 0.000, 4 0.000, 5 -25.000, 6 25.000, 10 0.900
+11 1.000, 12 5.000, 13 0.000, 14 0.000, 15 -50.000, 16 50.000, 20 1.100
+101 1.000, 102 1.000, 103 0.000, 104 0.000, 105 -50.000, 106 50.000
+111 1.000, 112 15.000, 113 0.000, 114 0.000, 115 -50.000, 116 50.000
+120 0.000, 130 100.000
+201 1.000, 202 2.000, 203 0.000, 204 0.000, 205 0.000, 206 0.000
+211 1.000, 212 15.000, 213 0.000, 214 0.000, 215 0.000, 216 0.000
+220 0.000, 230 10.000
+301 1.000, 302 2.000, 303 0.000, 304 0.000, 305 0.000, 306 0.000
+311 1.000, 312 15.000, 313 0.000, 314 0.000, 315 0.000, 316 0.000
+320 0.000, 330 100.000
 //
 """
 
@@ -333,20 +350,20 @@ class TlogConverterApp(tk.Tk):
     def __init__(self):
         super().__init__()
 
-        self.title("Tlog Parameter List Converter (Tykon + Quantum)")
-        self.geometry("1200x720")
+        self.title("Tlog Parameter List Converter")
+        self.geometry("1200x700")
         self.minsize(1050, 650)
 
         # --- Colors (dark + neon accents)
-        self.bg = "#121826"
-        self.panel = "#1A2235"
-        self.panel2 = "#192B4A"
+        self.bg = "#121826"          # dark navy
+        self.panel = "#1A2235"       # card background
+        self.panel2 = "#192B4A"      # alternate card
         self.fg = "#E6EEF8"
         self.muted = "#9FB3C8"
-        self.accent = "#22C55E"
-        self.accent2 = "#60A5FA"
-        self.warn = "#FBBF24"
-        self.danger = "#F87171"
+        self.accent = "#22C55E"      # green
+        self.accent2 = "#60A5FA"     # blue
+        self.warn = "#FBBF24"        # amber
+        self.danger = "#F87171"      # red
 
         self.configure(bg=self.bg)
 
@@ -392,8 +409,6 @@ class TlogConverterApp(tk.Tk):
         style.configure("Status.TLabel", background=self.bg, foreground=self.muted,
                         font=("Consolas", 10))
 
-        style.configure("TCombobox", padding=6)
-
     def _build_ui(self):
         # Header
         header = ttk.Frame(self, style="TFrame")
@@ -403,23 +418,6 @@ class TlogConverterApp(tk.Tk):
         ttk.Label(header,
                   text="Paste tlog parameter list on the left → click Convert → get tab-separated result on the right.",
                   style="Subtitle.TLabel").pack(anchor="w", pady=(2, 0))
-
-        # Mode row
-        mode_row = ttk.Frame(self, style="TFrame")
-        mode_row.pack(fill="x", padx=16, pady=(0, 8))
-
-        ttk.Label(mode_row, text="Product:", style="Subtitle.TLabel").pack(side="left")
-        self.product_var = tk.StringVar(value="Tykon")
-        self.product_combo = ttk.Combobox(
-            mode_row, textvariable=self.product_var,
-            values=["Tykon", "Quantum"], state="readonly", width=12
-        )
-        self.product_combo.pack(side="left", padx=(8, 0))
-
-        self.hide_empty_var = tk.BooleanVar(value=True)
-        ttk.Checkbutton(
-            mode_row, text="Hide empty sections", variable=self.hide_empty_var
-        ).pack(side="left", padx=(16, 0))
 
         # Main area with two cards
         main = ttk.Frame(self, style="TFrame")
@@ -511,37 +509,22 @@ class TlogConverterApp(tk.Tk):
             messagebox.showwarning("No input", "Please paste the tlog parameter list into the input box.")
             return
 
-        product = self.product_var.get().strip()
-        hide_empty = bool(self.hide_empty_var.get())
-
-        if product == "Quantum":
-            section_order = QUANTUM_SECTION_OUT_ORDER
-            profile = DEFAULT_PROFILE_QUANTUM
-        else:
-            section_order = TYKON_SECTION_OUT_ORDER
-            profile = DEFAULT_PROFILE_TYKON
-
         try:
             parsed = parse_tlog_parameter_list(raw)
-            converted, warnings = compute_converted_text(
-                parsed, profile, section_order, hide_empty_sections=hide_empty
-            )
+            converted, warnings = compute_converted_text(parsed, DEFAULT_PROFILE)
 
             self.output_text.delete("1.0", "end")
             self.output_text.insert("1.0", converted)
 
+            # Status message with quick summary
             total_pairs = sum(len(v) for v in parsed.values())
             sec_names = [s for s in parsed.keys() if s]
             warn_count = len(warnings)
 
             if warn_count:
-                self.status.set(
-                    f"Converted ({product}). Parsed {total_pairs} pairs in {len(sec_names)} sections. Warnings: {warn_count}"
-                )
+                self.status.set(f"Converted. Parsed {total_pairs} pairs in {len(sec_names)} sections. Warnings: {warn_count}")
             else:
-                self.status.set(
-                    f"Converted ({product}). Parsed {total_pairs} pairs in {len(sec_names)} sections. No warnings."
-                )
+                self.status.set(f"Converted. Parsed {total_pairs} pairs in {len(sec_names)} sections. No warnings.")
 
         except Exception as e:
             messagebox.showerror("Conversion failed", f"Error: {e}")
